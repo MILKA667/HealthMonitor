@@ -479,3 +479,4 @@ details[open] > summary { margin-bottom: 8px; }
 .row > .segmented { min-width: 0; }
 .census .stat .value { overflow-wrap: anywhere; }
 @media (max-width: 560px) { .segmented { flex-wrap: wrap; } }
+.clock { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; min-width: 64px; line-height: 1.3; }

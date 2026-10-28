@@ -26,9 +26,10 @@ export function RemindersPage() {
               <ul className="list">
                 {items.map((r) => (
                   <li key={r.id}>
-                    <div style={{ flex: 1 }}>
-                      <div className="title">{r.timeOfDay} · {r.title}</div>
-                      <div className="small muted">{r.kind === 'medication' ? 'Приём лекарства' : 'Измерение'} · {r.days.length === 7 ? 'ежедневно' : r.days.split('').map((d) => DAY_NAMES[d - 1]).join(', ')}</div>
+                    <span className="clock" style={{ opacity: r.active ? 1 : 0.45 }}>{r.timeOfDay}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="title">{r.title}</div>
+                      <div className="meta-line"><span>{r.kind === 'medication' ? 'Приём лекарства' : 'Измерение'}</span><span>{r.days.length === 7 ? 'ежедневно' : r.days.split('').map((d) => DAY_NAMES[d - 1]).join(', ')}</span></div>
                     </div>
                     <label className="check small"><input type="checkbox" checked={r.active} onChange={() => run(async () => { await put(`/reminders/${r.id}`, { active: !r.active }); list.reload() })} />активно</label>
                     <button type="button" className="ghost small" onClick={() => run(async () => { await del(`/reminders/${r.id}`); list.reload() })} aria-label={`Удалить ${r.title}`}>Удалить</button>
@@ -80,7 +81,7 @@ export function DevicesPage() {
                   <li key={d.id}>
                     <div style={{ flex: 1 }}>
                       <div className="title">{d.kind === 'glucometer' ? 'Глюкометр' : 'Тонометр'} {d.model}</div>
-                      <div className="small muted">{d.adapterTitle} · S/N {d.serial}</div>
+                      <div className="meta-line"><span>{d.adapterTitle}</span><span>S/N {d.serial}</span></div>
                       <div className="small muted">Последняя синхронизация: {d.lastSyncAt ? fmtDateTime(d.lastSyncAt) : 'ещё не было'}</div>
                     </div>
                     <button type="button" className="ghost small" onClick={() => run(async () => { await del(`/devices/${d.id}`); list.reload() })}>Отвязать</button>
@@ -143,7 +144,7 @@ export function RelativesPage() {
                   <li key={r.id}>
                     <div style={{ flex: 1 }}>
                       <div className="title">{r.name} {r.relation && <span className="muted small">({r.relation})</span>}</div>
-                      <div className="small muted">{r.phone} · {r.linkedAccount ? 'есть доступ к кабинету' : r.invitePending ? 'приглашение отправлено' : 'без доступа к кабинету'}</div>
+                      <div className="meta-line"><span>{r.phone}</span><span>{r.linkedAccount ? 'есть доступ к кабинету' : r.invitePending ? 'приглашение отправлено' : 'без доступа к кабинету'}</span></div>
                       {invite?.id === r.id && <div className="notice ok small" style={{ marginTop: 6 }}>Код приглашения: <b>{invite.code}</b> (также отправлен по SMS)</div>}
                     </div>
                     <div className="stack" style={{ gap: 4, alignItems: 'flex-end' }}>

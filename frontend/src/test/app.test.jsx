@@ -247,6 +247,32 @@ describe('doctor cabinet', () => {
   })
 })
 
+describe('admin cabinet', () => {
+  it('blocking a user asks for confirmation in an accessible dialog', async () => {
+    sessionStorage.setItem('hm_token', 'tok')
+    const ADMIN = { id: 1, role: 'admin', fullName: 'Админ Тестовый', email: 'a@t.ru', phone: '+79990000002', twofaEnabled: true }
+    const calls = mockApi({
+      'GET /auth/me': { user: ADMIN, consents: CONSENTS_OK },
+      'GET /notifications': { items: [], unread: 0 },
+      'GET /admin/users': { items: [{ id: 5, role: 'doctor', status: 'active', fullName: 'Синтетический Врач', email: 'doc@t.ru', loginCount: 0, lastLoginAt: null }] },
+      'GET /admin/roles': { doctor: ['patients:assigned:read'] },
+      'PATCH /admin/users/:id': { ok: true },
+    })
+    const user = userEvent.setup()
+    renderApp('/admin/users')
+    expect(await screen.findByText(/Медицинские данные пациентов администраторам недоступны/)).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Заблокировать' }))
+    const dialog = screen.getByRole('dialog', { name: 'Заблокировать пользователя?' })
+    expect(within(dialog).getByRole('button', { name: 'Заблокировать' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Заблокировать' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Заблокировать' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ status: 'blocked' }))
+  })
+})
+
 describe('LineChart', () => {
   it('renders series, threshold corridor and critical limit', () => {
     const t = Date.now()

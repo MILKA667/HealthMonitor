@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { patch, post } from '../../api.js'
 import { useApi } from '../../hooks.js'
 import { ROLE_LABELS, STATUS_LABELS, fmtDateTime, fmtNum } from '../../format.js'
-import { Card, Empty, ErrorBox, Field, Loadable, Segmented, Stat, useAction } from '../../components/ui.jsx'
+import { Card, Empty, ErrorBox, Field, Loadable, Segmented, Stat, useAction, useDialog } from '../../components/ui.jsx'
 import { PageHeader } from '../../components/Layout.jsx'
 
 /** Platform metrics against the charter success criteria. */
@@ -10,17 +10,19 @@ export function AdminMetrics() {
   const state = useApi('/admin/metrics', { intervalMs: 60_000 })
   return (
     <>
-      <PageHeader title="Метрики платформы" />
+      <PageHeader title="Метрики платформы" sub="Агрегированные показатели без доступа к медицинским записям" />
       <Loadable state={state}>
         {(m) => (
           <div className="stack">
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
-              <Card><Stat label="Пациенты (входили)" value={`${m.users.patients} (${m.users.patientsLoggedIn})`} hint="цель: 20 вошедших" /></Card>
-              <Card><Stat label="Врачи (входили)" value={`${m.users.doctors} (${m.users.doctorsLoggedIn})`} hint="цель: 5 вошедших" /></Card>
-              <Card><Stat label="Регулярный ввод" value={m.adherence.pct ?? '—'} unit="%" hint={`${m.adherence.regularPatients} из ${m.adherence.activePatients} активных · цель ≥ ${m.adherence.targetPct}%`} /></Card>
-              <Card><Stat label="Реакция на крит. алерт" value={m.alerts.reactionAllTime.avgMinutes === null ? '—' : fmtNum(m.alerts.reactionAllTime.avgMinutes)} unit="мин" hint={`цель ≤ ${m.alerts.reactionAllTime.slaMinutes} мин · в SLA ${m.alerts.reactionAllTime.withinSlaPct ?? '—'}%`} /></Card>
-              <Card><Stat label="Открытые алерты" value={m.alerts.open} hint={`критических: ${m.alerts.openCritical}`} tone={m.alerts.openCritical ? 'critical' : undefined} /></Card>
-              <Card><Stat label="Показания с устройств" value={(m.devices.readings.glucometer ?? 0) + (m.devices.readings.tonometer ?? 0)} hint={`глюкометры ${m.devices.readings.glucometer ?? 0} · тонометры ${m.devices.readings.tonometer ?? 0}`} /></Card>
+            <div className="census" role="group" aria-label="Участники пилота">
+              <Stat label="Пациенты (входили)" value={`${m.users.patients} (${m.users.patientsLoggedIn})`} hint="цель: 20 вошедших" />
+              <Stat label="Врачи (входили)" value={`${m.users.doctors} (${m.users.doctorsLoggedIn})`} hint="цель: 5 вошедших" />
+              <Stat label="Регулярный ввод" value={m.adherence.pct ?? '—'} unit="%" hint={`${m.adherence.regularPatients} из ${m.adherence.activePatients} активных, цель от ${m.adherence.targetPct}%`} />
+            </div>
+            <div className="census" role="group" aria-label="Алерты и устройства">
+              <Stat label="Реакция на крит. алерт" value={m.alerts.reactionAllTime.avgMinutes === null ? '—' : fmtNum(m.alerts.reactionAllTime.avgMinutes)} unit="мин" hint={`цель до ${m.alerts.reactionAllTime.slaMinutes} мин, в SLA ${m.alerts.reactionAllTime.withinSlaPct ?? '—'}%`} />
+              <Stat label="Открытые алерты" value={m.alerts.open} hint={`критических: ${m.alerts.openCritical}`} tone={m.alerts.openCritical ? 'critical' : undefined} />
+              <Stat label="Показания с устройств" value={(m.devices.readings.glucometer ?? 0) + (m.devices.readings.tonometer ?? 0)} hint={`глюкометры ${m.devices.readings.glucometer ?? 0}, тонометры ${m.devices.readings.tonometer ?? 0}`} />
             </div>
             <Card title="Критерии успеха (устав, раздел 2)">
               <ul className="list">
@@ -46,6 +48,7 @@ export function AdminUsers() {
   const roles = useApi('/admin/roles')
   const { busy, error, run } = useAction()
   const [creating, setCreating] = useState(false)
+  const [dialog, ask] = useDialog()
   const update = (id, body) => run(async () => { await patch(`/admin/users/${id}`, body); list.reload() })
   const items = (list.data?.items ?? []).filter((u) => !q || `${u.fullName} ${u.email}`.toLowerCase().includes(q.toLowerCase()))
 
@@ -54,31 +57,32 @@ export function AdminUsers() {
       <PageHeader title="Пользователи">
         <button type="button" onClick={() => setCreating((c) => !c)}>{creating ? 'Скрыть' : 'Добавить врача / администратора'}</button>
       </PageHeader>
+      {dialog}
       {creating && <CreateUser onCreated={() => { setCreating(false); list.reload() }} />}
       <Card actions={<><input aria-label="Поиск" placeholder="Поиск по имени/e-mail" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} /><Segmented label="Роль" value={role} onChange={setRole} options={[['', 'Все'], ['patient', 'Пациенты'], ['doctor', 'Врачи'], ['relative', 'Родственники'], ['admin', 'Админы']]} /></>}>
         <ErrorBox error={error} />
         <Loadable state={list}>
           {() => (
             <div className="table-wrap">
-              <table>
+              <table className="responsive">
                 <thead><tr><th>Пользователь</th><th>Роль</th><th>Статус</th><th>Входов</th><th>Последний вход</th><th>Действия</th></tr></thead>
                 <tbody>
                   {items.map((u) => (
                     <tr key={u.id}>
-                      <td><div className="title">{u.fullName}</div><div className="small muted">{u.email}{u.phone ? ` · ${u.phone}` : ''}</div></td>
-                      <td>
-                        <select aria-label={`Роль ${u.fullName}`} value={u.role} disabled={busy} onChange={(e) => { if (window.confirm(`Сменить роль на «${ROLE_LABELS[e.target.value]}»?`)) update(u.id, { role: e.target.value }) }}>
+                      <td data-label=""><div className="title">{u.fullName}</div><div className="meta-line"><span>{u.email}</span>{u.phone && <span>{u.phone}</span>}</div></td>
+                      <td data-label="Роль">
+                        <select aria-label={`Роль ${u.fullName}`} value={u.role} disabled={busy} onChange={async (e) => { const role = e.target.value; if (await ask({ title: 'Сменить роль?', body: `${u.fullName}: «${ROLE_LABELS[u.role]}» → «${ROLE_LABELS[role]}». Права доступа изменятся сразу.`, confirmLabel: 'Сменить роль' })) update(u.id, { role }) }}>
                           {Object.entries(ROLE_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                         </select>
                         {u.role === 'patient' && (
                           <AssignDoctor user={u} doctors={doctors.data?.items ?? []} onAssign={(doctorId) => update(u.id, { doctorId })} />
                         )}
                       </td>
-                      <td><span className={`badge ${u.status === 'active' ? 'ok' : u.status === 'blocked' ? 'critical' : ''}`}>{STATUS_LABELS[u.status]}</span></td>
-                      <td className="num">{u.loginCount}</td>
-                      <td className="nowrap small">{fmtDateTime(u.lastLoginAt)}</td>
-                      <td>
-                        {u.status === 'active' && <button type="button" className="secondary small" disabled={busy} onClick={() => { if (window.confirm(`Заблокировать ${u.fullName}?`)) update(u.id, { status: 'blocked' }) }}>Заблокировать</button>}
+                      <td data-label="Статус"><span className={`badge ${u.status === 'active' ? 'ok' : u.status === 'blocked' ? 'critical' : ''}`}>{STATUS_LABELS[u.status]}</span></td>
+                      <td data-label="Входов" className="num">{u.loginCount}</td>
+                      <td data-label="Последний вход" className="nowrap small">{fmtDateTime(u.lastLoginAt)}</td>
+                      <td data-label="">
+                        {u.status === 'active' && <button type="button" className="secondary small" disabled={busy} onClick={async () => { if (await ask({ title: 'Заблокировать пользователя?', body: `${u.fullName} не сможет войти в систему. Разблокировать можно на этой же странице.`, confirmLabel: 'Заблокировать', danger: true })) update(u.id, { status: 'blocked' }) }}>Заблокировать</button>}
                         {u.status === 'blocked' && <button type="button" className="small" disabled={busy} onClick={() => update(u.id, { status: 'active' })}>Разблокировать</button>}
                       </td>
                     </tr>
@@ -139,8 +143,14 @@ export function AdminRequests() {
   const [status, setStatus] = useState('pending')
   const list = useApi(`/admin/requests?status=${status}`)
   const { busy, error, run } = useAction()
-  const decide = (id, decision) => {
-    const comment = decision === 'reject' ? window.prompt('Причина отклонения (необязательно)') ?? undefined : undefined
+  const [dialog, ask] = useDialog()
+  const decide = async (id, decision) => {
+    let comment
+    if (decision === 'reject') {
+      const answer = await ask({ title: 'Отклонить заявку?', input: 'Причина отклонения (необязательно)', confirmLabel: 'Отклонить', danger: true })
+      if (answer === false) return
+      comment = answer || undefined
+    }
     run(async () => { await post(`/admin/requests/${id}/${decision}`, comment ? { comment } : {}); list.reload() })
   }
   return (
@@ -148,6 +158,7 @@ export function AdminRequests() {
       <PageHeader title="Модерация заявок">
         <Segmented label="Статус" value={status} onChange={setStatus} options={[['pending', 'Ожидают'], ['approved', 'Одобрены'], ['rejected', 'Отклонены']]} />
       </PageHeader>
+      {dialog}
       <Card>
         <ErrorBox error={error} />
         <Loadable state={list}>
@@ -158,7 +169,7 @@ export function AdminRequests() {
                   <div style={{ flex: 1 }}>
                     <div className="row"><span className="badge primary">{r.type === 'doctor_registration' ? 'Регистрация врача' : 'Прикрепление к врачу'}</span><span className="small muted">{fmtDateTime(r.createdAt)}</span></div>
                     <div className="title">{r.user.fullName} <span className="small muted">{r.user.email}</span></div>
-                    {r.type === 'doctor_registration' ? <div className="small">Специальность: {r.specialty || '—'} · лицензия: {r.licenseNumber || '—'}</div> : <div className="small">Врач: {r.targetName}</div>}
+                    {r.type === 'doctor_registration' ? <div className="meta-line"><span>Специальность: {r.specialty || '—'}</span><span>Лицензия: {r.licenseNumber || '—'}</span></div> : <div className="small">Врач: {r.targetName}</div>}
                     {r.comment && <div className="small muted">Комментарий: {r.comment}</div>}
                   </div>
                   {r.status === 'pending' && (
@@ -190,16 +201,16 @@ export function AdminAudit() {
           {(data) => (
             <>
               <div className="table-wrap">
-                <table>
+                <table className="responsive">
                   <thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Объект</th><th>IP</th></tr></thead>
                   <tbody>
                     {data.items.map((a) => (
                       <tr key={a.id}>
-                        <td className="nowrap small">{fmtDateTime(a.at)}</td>
-                        <td>{a.userName ?? '—'}<div className="small muted">{ROLE_LABELS[a.role] ?? a.role ?? ''}</div></td>
-                        <td><code>{a.action}</code>{a.details && <div className="small muted" style={{ maxWidth: 320, overflowWrap: 'anywhere' }}>{JSON.stringify(a.details)}</div>}</td>
-                        <td className="small">{a.entity ? `${a.entity} #${a.entityId ?? ''}` : '—'}</td>
-                        <td className="small">{a.ip}</td>
+                        <td data-label="Время" className="nowrap small">{fmtDateTime(a.at)}</td>
+                        <td data-label="Пользователь">{a.userName ?? '—'}<div className="small muted">{ROLE_LABELS[a.role] ?? a.role ?? ''}</div></td>
+                        <td data-label="Действие"><code>{a.action}</code>{a.details && <div className="small muted" style={{ maxWidth: 320, overflowWrap: 'anywhere' }}>{JSON.stringify(a.details)}</div>}</td>
+                        <td data-label="Объект" className="small">{a.entity ? `${a.entity} #${a.entityId ?? ''}` : '—'}</td>
+                        <td data-label="IP" className="small">{a.ip}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -220,22 +231,22 @@ export function AdminAccessLog() {
   const list = useApi(`/admin/access-log?limit=50&offset=${offset}`)
   return (
     <>
-      <PageHeader title="Журнал доступа к медицинским данным" />
+      <PageHeader title="Журнал доступа к медицинским данным" sub="Кто и когда открывал данные пациентов. Содержимое записей здесь не показывается." />
       <Card>
         <Loadable state={list}>
           {(data) => (
             <>
               <div className="table-wrap">
-                <table>
+                <table className="responsive">
                   <thead><tr><th>Время</th><th>Кто</th><th>Пациент</th><th>Ресурс</th><th>IP</th></tr></thead>
                   <tbody>
                     {data.items.map((a) => (
                       <tr key={a.id}>
-                        <td className="nowrap small">{fmtDateTime(a.at)}</td>
-                        <td>{a.userName}<div className="small muted">{ROLE_LABELS[a.role]}</div></td>
-                        <td>{a.patientName}</td>
-                        <td><code>{a.resource}</code></td>
-                        <td className="small">{a.ip}</td>
+                        <td data-label="Время" className="nowrap small">{fmtDateTime(a.at)}</td>
+                        <td data-label="Кто">{a.userName}<div className="small muted">{ROLE_LABELS[a.role]}</div></td>
+                        <td data-label="Пациент">{a.patientName}</td>
+                        <td data-label="Ресурс"><code>{a.resource}</code></td>
+                        <td data-label="IP" className="small">{a.ip}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -254,9 +265,9 @@ function Pager({ offset, total, limit, onChange }) {
   if (total <= limit) return null
   return (
     <div className="row" style={{ marginTop: 10 }}>
-      <button type="button" className="secondary small" disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - limit))}>← Назад</button>
+      <button type="button" className="secondary small" disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - limit))}>Назад</button>
       <span className="small muted">{offset + 1}–{Math.min(total, offset + limit)} из {total}</span>
-      <button type="button" className="secondary small" disabled={offset + limit >= total} onClick={() => onChange(offset + limit)}>Вперёд →</button>
+      <button type="button" className="secondary small" disabled={offset + limit >= total} onClick={() => onChange(offset + limit)}>Вперёд</button>
     </div>
   )
 }
@@ -273,7 +284,7 @@ export function AdminConsents() {
       <div className="grid-2">
         <Card title="Действующие редакции">
           <Loadable state={docs}>
-            {(items) => <ul className="list">{items.map((d) => <li key={d.id}><div><div className="title">{d.title}</div><div className="small muted">версия {d.version} · опубликована {fmtDateTime(d.publishedAt)}</div></div></li>)}</ul>}
+            {(items) => <ul className="list">{items.map((d) => <li key={d.id}><div><div className="title">{d.title}</div><div className="small muted">Версия {d.version}, опубликована {fmtDateTime(d.publishedAt)}</div></div></li>)}</ul>}
           </Loadable>
         </Card>
         <Card title="Опубликовать новую редакцию">

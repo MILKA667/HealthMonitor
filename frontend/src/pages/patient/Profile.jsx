@@ -3,7 +3,7 @@ import { download, post, put } from '../../api.js'
 import { useAuth } from '../../auth.jsx'
 import { useApi } from '../../hooks.js'
 import { CONDITIONS, fmtDate, fmtDateTime } from '../../format.js'
-import { Card, ErrorBox, Field, Loadable, useAction } from '../../components/ui.jsx'
+import { Card, ErrorBox, Field, Loadable, useAction, useDialog } from '../../components/ui.jsx'
 import { PageHeader } from '../../components/Layout.jsx'
 import { SecurityCard } from '../shared/Security.jsx'
 
@@ -77,7 +77,7 @@ function DoctorChoice() {
         <ErrorBox error={error} />
         {requests.data?.length > 0 && (
           <ul className="list small">
-            {requests.data.map((r) => <li key={r.id}>{fmtDate(r.createdAt)} · {r.doctorName} · {REQ_STATUS[r.status]}{r.comment ? ` («${r.comment}»)` : ''}</li>)}
+            {requests.data.map((r) => <li key={r.id}>{fmtDate(r.createdAt)}: {r.doctorName}, {REQ_STATUS[r.status].toLowerCase()}{r.comment ? ` («${r.comment}»)` : ''}</li>)}
           </ul>
         )}
       </div>
@@ -101,8 +101,10 @@ export function ConsentsCard() {
   const { refresh } = useAuth()
   const state = useApi('/consents/me')
   const { busy, error, run } = useAction()
+  const [dialog, ask] = useDialog()
   return (
     <Card title="Согласия на обработку данных">
+      {dialog}
       <Loadable state={state}>
         {(data) => (
           <div className="stack">
@@ -115,12 +117,12 @@ export function ConsentsCard() {
                     <div className="title" style={{ flex: 1 }}>{d.title}</div>
                     <span className={`badge ${active ? (latest ? 'ok' : 'warning') : 'critical'}`}>{active ? (latest ? 'действует' : 'новая редакция') : 'не дано'}</span>
                   </div>
-                  <div className="small muted">Версия {d.version}{active ? ` · дано ${fmtDateTime(active.grantedAt)} (v${active.version})` : ''}</div>
+                  <div className="small muted">Версия {d.version}{active ? `, дано ${fmtDateTime(active.grantedAt)} (v${active.version})` : ''}</div>
                   <details><summary>Текст документа</summary><p>{d.body}</p></details>
                   <div className="row" style={{ marginTop: 6 }}>
                     {(!active || !latest) && <button type="button" className="small" disabled={busy} onClick={() => run(async () => { await post('/consents', { documentId: d.id }); await state.reload(); refresh() })}>{d.type === 'user_agreement' ? 'Принять' : 'Дать согласие'}</button>}
                     {active && d.type !== 'user_agreement' && (
-                      <button type="button" className="secondary small" disabled={busy} onClick={() => { if (window.confirm(d.type === 'health_data' ? 'После отзыва врач и родственники потеряют доступ к вашим медицинским данным, а ввод показателей будет приостановлен. Отозвать?' : 'Отозвать согласие?')) run(async () => { for (const c of data.consents.filter((x) => x.type === d.type && !x.revokedAt)) await post(`/consents/${c.id}/revoke`); await state.reload(); refresh() }) }}>Отозвать</button>
+                      <button type="button" className="secondary small" disabled={busy} onClick={async () => { if (await ask({ title: 'Отозвать согласие?', body: d.type === 'health_data' ? 'Врач и родственники потеряют доступ к вашим медицинским данным, ввод показателей будет приостановлен. Согласие можно дать снова.' : 'Согласие можно дать снова на этой странице.', confirmLabel: 'Отозвать', danger: true })) run(async () => { for (const c of data.consents.filter((x) => x.type === d.type && !x.revokedAt)) await post(`/consents/${c.id}/revoke`); await state.reload(); refresh() }) }}>Отозвать</button>
                     )}
                   </div>
                 </div>
