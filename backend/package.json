@@ -1,0 +1,23 @@
+{
+  "name": "healthmonitor-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HealthMonitor API: remote monitoring of chronic patients (diabetes, hypertension, asthma)",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "seed": "node scripts/seed-pilot.js",
+    "simulate-devices": "node scripts/simulate-devices.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "pdfmake": "^0.2.23"
+  }
+}
