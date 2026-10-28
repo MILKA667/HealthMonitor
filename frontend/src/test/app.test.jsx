@@ -67,6 +67,7 @@ describe('authentication', () => {
       'POST /auth/2fa/verify': (b) => (b.code === '123456' ? { token: 'tok', user: DOCTOR } : { __status: 401, __body: { error: { message: 'Неверный код' } } }),
       'GET /auth/me': { user: DOCTOR, consents: CONSENTS_OK },
       'GET /doctor/dashboard': { patients: [], totals: { patients: 0, critical: 0, warning: 0, stale: 0 }, reaction: { avgMinutes: null, slaMinutes: 15 } },
+      'GET /alerts': { items: [] },
       'GET /notifications': { items: [], unread: 0 },
     })
     const user = userEvent.setup()
@@ -197,6 +198,7 @@ describe('doctor cabinet', () => {
     mockApi({
       'GET /auth/me': { user: DOCTOR, consents: CONSENTS_OK },
       'GET /notifications': { items: [], unread: 0 },
+      'GET /alerts': { items: [] },
       'GET /doctor/dashboard': {
         patients: [
           { id: 1, fullName: 'Критический Пациент', priority: 'critical', openCritical: 2, openWarning: 0, conditions: ['diabetes_t2'], consent: true, latest: [{ type: 'glucose', value: { glucose: 22 } }], lastMeasurementAt: now },
@@ -218,6 +220,30 @@ describe('doctor cabinet', () => {
     await user.click(screen.getByRole('button', { name: 'Нет данных' }))
     expect(screen.queryByText('Критический Пациент')).not.toBeInTheDocument()
     expect(screen.getByText('Без Данных')).toBeInTheDocument()
+  })
+  it('alarm queue shows open alerts by severity and acknowledges in one click', async () => {
+    sessionStorage.setItem('hm_token', 'tok')
+    const old = new Date(Date.now() - 20 * 60000).toISOString()
+    let open = [
+      { id: 11, patientId: 2, patientName: 'Пациент Отклонение', severity: 'warning', status: 'open', message: 'Глюкоза выше целевого диапазона', createdAt: old, escalationLevel: 0 },
+      { id: 12, patientId: 1, patientName: 'Пациент Критический', severity: 'critical', status: 'open', message: 'Давление выше критического порога', createdAt: new Date().toISOString(), escalationLevel: 0 },
+    ]
+    const calls = mockApi({
+      'GET /auth/me': { user: DOCTOR, consents: CONSENTS_OK },
+      'GET /notifications': { items: [], unread: 0 },
+      'GET /alerts': () => ({ items: open }),
+      'POST /alerts/:id/ack': (b, url) => { open = open.filter((a) => !url.includes(`/alerts/${a.id}/`)); return { ok: true } },
+      'GET /doctor/dashboard': { patients: [], totals: { patients: 0, critical: 1, warning: 1, stale: 0 }, reaction: { avgMinutes: null, slaMinutes: 15 } },
+    })
+    const user = userEvent.setup()
+    renderApp('/doctor')
+    const queue = await screen.findByRole('region', { name: /Ожидают реакции: 2/ })
+    const names = within(queue).getAllByRole('link').filter((a) => a.getAttribute('href')?.startsWith('/doctor/patients/')).map((a) => a.textContent)
+    expect(names).toEqual(['Пациент Критический', 'Пациент Отклонение'])
+    expect(within(queue).getByText('ждёт 20 мин')).toHaveClass('over')
+    await user.click(within(queue).getByRole('button', { name: 'Принять алерт: Пациент Критический' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/alerts/12/ack')).toBe(true))
+    expect(await screen.findByRole('region', { name: /Ожидают реакции: 1/ })).toBeInTheDocument()
   })
 })
 

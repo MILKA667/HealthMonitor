@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth.jsx'
 import { useApi } from '../../hooks.js'
 import { METRICS, TYPES, fmtDateTime, fmtNum, timeAgo, typesFor } from '../../format.js'
-import { Card, Empty, Loadable, SeverityBadge, Stat } from '../../components/ui.jsx'
+import { Card, Empty, Icon, Loadable, SeverityBadge } from '../../components/ui.jsx'
 import { PageHeader } from '../../components/Layout.jsx'
 import { MeasurementForm } from '../shared/MeasurementForm.jsx'
 import { History } from '../shared/History.jsx'
 
+const CHANNEL_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)']
 const ALERT_STATUS = { open: 'Ожидает врача', acknowledged: 'Врач ознакомился', resolved: 'Закрыт' }
 
 export function PatientOverview() {
@@ -23,7 +24,7 @@ export function PatientOverview() {
     <>
       <PageHeader title={`Здравствуйте, ${user.fullName.split(' ').slice(-2).join(' ')}`} />
       {noConsent && (
-        <div className="notice warn" style={{ marginBottom: 16 }}>
+        <div className="notice warn" role="status" style={{ marginBottom: 16 }}>
           Согласие на обработку сведений о здоровье отозвано — ввод показателей и доступ врача приостановлены. <Link to="/patient/profile">Управление согласиями</Link>
         </div>
       )}
@@ -32,35 +33,46 @@ export function PatientOverview() {
           Лечащий врач ещё не назначен. <Link to="/patient/profile">Выбрать врача</Link>
         </div>
       )}
-      <div className="grid-2">
-        <div className="stack">
-          <Card title="Последние показатели">
-            <Loadable state={latest}>
-              {(data) => {
-                const metrics = types.flatMap((t) => TYPES[t].metrics).filter((m) => data.summary[m])
-                return metrics.length ? (
-                  <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-                    {metrics.map((m) => (
-                      <Stat key={m} label={METRICS[m].label} value={fmtNum(data.summary[m].last)} unit={METRICS[m].unit} hint={timeAgo(data.summary[m].lastAt)} />
-                    ))}
-                  </div>
-                ) : <Empty>Показателей пока нет — внесите первое измерение ниже</Empty>
-              }}
-            </Loadable>
+      <div className="patient-top">
+        <Card title="Последние показатели">
+          <Loadable state={latest}>
+            {(data) => {
+              const metrics = types.flatMap((t) => TYPES[t].metrics.map((m, i) => [t, m, i])).filter(([, m]) => data.summary[m])
+              return metrics.length ? (
+                <div className="readout">
+                  {metrics.map(([t, m, i]) => {
+                    const last = data.items.find((x) => x.type === t && typeof x.value[m] === 'number')
+                    const severity = last?.severity ?? 'normal'
+                    return (
+                      <div key={m} className={`channel ${severity}`}>
+                        <span className="ch-label"><i style={{ background: CHANNEL_COLORS[i] }} />{METRICS[m].label}</span>
+                        <span className="ch-value">{fmtNum(data.summary[m].last)}<span className="unit">{METRICS[m].unit}</span></span>
+                        <span className="ch-meta">
+                          {severity !== 'normal' && <SeverityBadge severity={severity} />}
+                          <span>{timeAgo(data.summary[m].lastAt)}</span>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : <Empty>Показателей пока нет. Внесите первое измерение в форму рядом.</Empty>
+            }}
+          </Loadable>
+        </Card>
+        {!noConsent && (
+          <Card title="Новое измерение">
+            <MeasurementForm patientId={user.id} types={types} onSaved={() => setReloadKey((k) => k + 1)} />
           </Card>
-          {!noConsent && (
-            <Card title="Новое измерение">
-              <MeasurementForm patientId={user.id} types={types} onSaved={() => setReloadKey((k) => k + 1)} />
-            </Card>
-          )}
-          <History patientId={user.id} types={types} thresholds={thresholds.data?.thresholds} reloadKey={reloadKey} />
-        </div>
+        )}
+      </div>
+      <div className="grid-2" style={{ marginTop: 16 }}>
+        <History patientId={user.id} types={types} thresholds={thresholds.data?.thresholds} reloadKey={reloadKey} />
         <div className="stack">
           <Card title="Лечащий врач">
             {profile?.doctorId ? (
               <div className="stack">
                 <div className="title">{profile.doctorName}</div>
-                <Link to="/patient/chat" className="btn secondary">Написать врачу</Link>
+                <Link to="/patient/chat" className="btn secondary"><Icon name="chat" />Написать врачу</Link>
               </div>
             ) : <Empty>Не назначен</Empty>}
           </Card>
@@ -70,10 +82,9 @@ export function PatientOverview() {
                 <ul className="list">
                   {data.items.map((a) => (
                     <li key={a.id}>
-                      <div className={`prio-bar ${a.severity}`} />
                       <div>
-                        <div className="row"><SeverityBadge severity={a.severity} /><span className="small muted">{ALERT_STATUS[a.status]}</span></div>
-                        <div className="small">{a.message}</div>
+                        <div className="row" style={{ gap: 8 }}><SeverityBadge severity={a.severity} /><span className="small muted">{ALERT_STATUS[a.status]}</span></div>
+                        <div className="small" style={{ marginTop: 3 }}>{a.message}</div>
                         <div className="small muted">{fmtDateTime(a.createdAt)}</div>
                       </div>
                     </li>
@@ -97,7 +108,7 @@ export function PatientHistoryPage() {
   const types = typesFor(profile?.conditions)
   return (
     <>
-      <PageHeader title="История и динамика" />
+      <PageHeader title="История и динамика" sub="Наведите на точку графика, чтобы увидеть значение и время" />
       <History patientId={user.id} types={types} thresholds={thresholds.data?.thresholds} />
     </>
   )

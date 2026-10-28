@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { del, download, put } from '../../api.js'
 import { useApi } from '../../hooks.js'
 import { CONDITIONS, METRICS, fmtDate, fmtNum, timeAgo, typesFor } from '../../format.js'
-import { Card, Empty, ErrorBox, Loadable, Stat, useAction } from '../../components/ui.jsx'
+import { Card, Empty, ErrorBox, Icon, Loadable, ReadOnlyTag, Stat, useAction } from '../../components/ui.jsx'
 import { PageHeader } from '../../components/Layout.jsx'
 import { History } from './History.jsx'
 import { ChatThread } from './ChatThread.jsx'
@@ -21,34 +21,25 @@ export function PatientCard({ mode = 'doctor' }) {
         const types = typesFor(c.profile.conditions)
         return (
           <>
-            <PageHeader title={c.patient.fullName} />
+            <PageHeader title={c.patient.fullName} sub={c.profile.conditions.map((x) => CONDITIONS[x]).join(', ') || 'Нозология не указана'}>
+              {!doctor && <ReadOnlyTag />}
+              {doctor && <ReportButton patientId={id} />}
+            </PageHeader>
             <div className="stack">
-              <Card>
-                <div className="row" style={{ alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div>{c.profile.conditions.map((x) => CONDITIONS[x]).join(', ') || 'Нозология не указана'}</div>
-                    <div className="small muted">
-                      {doctor && c.patient.phone && <>Тел.: {c.patient.phone} · </>}
-                      {doctor && c.profile.birthDate && <>Дата рождения: {fmtDate(c.profile.birthDate)} · </>}
-                      Последнее измерение: {timeAgo(c.lastMeasurementAt)}
-                      {!doctor && c.profile.doctorName && <> · Врач: {c.profile.doctorName}</>}
-                    </div>
-                  </div>
-                  {doctor && <ReportButton patientId={id} />}
-                </div>
-                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginTop: 14 }}>
+              <div className="meta-line">
+                <span>Последнее измерение: {timeAgo(c.lastMeasurementAt)}</span>
+                {doctor && c.patient.phone && <span>Телефон: {c.patient.phone}</span>}
+                {doctor && c.profile.birthDate && <span>Дата рождения: {fmtDate(c.profile.birthDate)}</span>}
+                {!doctor && c.profile.doctorName && <span>Лечащий врач: {c.profile.doctorName}</span>}
+              </div>
+              {Object.keys(c.summary30d).length > 0 && doctor && tab !== 'history' && (
+                <div className="census" role="group" aria-label="Средние значения за 30 дней">
                   {Object.entries(c.summary30d).map(([m, s]) => (
-                    <Stat key={m} label={`${METRICS[m]?.short ?? m}, 30 дн.`} value={fmtNum(s.avg)} unit={METRICS[m]?.unit} hint={`${fmtNum(s.min)}–${fmtNum(s.max)} · в диапазоне ${s.inRangePct}%`} />
-                  ))}
-                </div>
-              </Card>
-              {doctor && (
-                <div className="tabs" role="tablist">
-                  {[['history', 'Динамика'], ['alerts', 'Алерты'], ['thresholds', 'Пороги'], ['chat', 'Чат'], ['relatives', 'Родственники']].map(([k, label]) => (
-                    <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{label}</button>
+                    <Stat key={m} label={`${METRICS[m]?.short ?? m}, среднее за 30 дн.`} value={fmtNum(s.avg)} unit={METRICS[m]?.unit} hint={`от ${fmtNum(s.min)} до ${fmtNum(s.max)}, в диапазоне ${s.inRangePct}%`} />
                   ))}
                 </div>
               )}
+              {doctor && <Tabs value={tab} onChange={setTab} items={TABS} />}
               {(tab === 'history' || !doctor) && <History patientId={id} types={types} thresholds={c.thresholds} />}
               {(tab === 'alerts' || !doctor) && (
                 <Card title="Алерты">
@@ -60,7 +51,7 @@ export function PatientCard({ mode = 'doctor' }) {
               {doctor && tab === 'relatives' && (
                 <Card title="Контакты родственников">
                   {c.relatives.length ? (
-                    <ul className="list">{c.relatives.map((r) => <li key={r.id}><div><div className="title">{r.name} {r.relation && <span className="small muted">({r.relation})</span>}</div><div className="small muted">{r.phone} · {r.notifyEmergency ? 'получает экстренные SMS' : 'без экстренных SMS'}</div></div></li>)}</ul>
+                    <ul className="list">{c.relatives.map((r) => <li key={r.id}><div><div className="title">{r.name} {r.relation && <span className="small muted">({r.relation})</span>}</div><div className="meta-line"><span>{r.phone}</span><span>{r.notifyEmergency ? 'получает экстренные SMS' : 'без экстренных SMS'}</span></div></div></li>)}</ul>
                   ) : <Empty>Пациент не указал родственников</Empty>}
                 </Card>
               )}
@@ -72,11 +63,33 @@ export function PatientCard({ mode = 'doctor' }) {
   )
 }
 
+const TABS = [['history', 'Динамика'], ['alerts', 'Алерты'], ['thresholds', 'Пороги'], ['chat', 'Чат'], ['relatives', 'Родственники']]
+
+/** Tab strip with roving focus: arrow keys move between tabs. */
+function Tabs({ value, onChange, items }) {
+  const onKeyDown = (e) => {
+    const i = items.findIndex(([k]) => k === value)
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+    if (!step) return
+    e.preventDefault()
+    const next = items[(i + step + items.length) % items.length][0]
+    onChange(next)
+    e.currentTarget.querySelector(`[data-tab="${next}"]`)?.focus()
+  }
+  return (
+    <div className="tabs" role="tablist" aria-label="Разделы карточки" onKeyDown={onKeyDown}>
+      {items.map(([k, label]) => (
+        <button key={k} data-tab={k} type="button" role="tab" aria-selected={value === k} tabIndex={value === k ? 0 : -1} className={value === k ? 'active' : ''} onClick={() => onChange(k)}>{label}</button>
+      ))}
+    </div>
+  )
+}
+
 function ReportButton({ patientId }) {
   const { busy, error, run } = useAction()
   return (
     <div className="stack" style={{ alignItems: 'flex-end', gap: 4 }}>
-      <button type="button" className="secondary" disabled={busy} onClick={() => run(() => download(`/reports/patients/${patientId}/pdf`, `report-${patientId}.pdf`))}>{busy ? 'Формирование…' : 'Отчёт PDF (30 дн.)'}</button>
+      <button type="button" className="secondary" disabled={busy} onClick={() => run(() => download(`/reports/patients/${patientId}/pdf`, `report-${patientId}.pdf`))}><Icon name="file" />{busy ? 'Формирование…' : 'Отчёт PDF за 30 дней'}</button>
       <ErrorBox error={error} />
     </div>
   )
@@ -99,9 +112,9 @@ function ThresholdsEditor({ patientId, thresholds, onSaved }) {
           <tbody>
             {Object.keys(thresholds).map((m) => (
               <tr key={m}>
-                <td>{METRICS[m]?.label}<div className="small muted">{METRICS[m]?.unit} · {thresholds[m].custom ? 'индивидуальные' : 'по умолчанию'}</div></td>
+                <td>{METRICS[m]?.label}<div className="small muted">{METRICS[m]?.unit}, {thresholds[m].custom ? 'индивидуальные' : 'по умолчанию'}</div></td>
                 {BOUNDS.map(([b]) => (
-                  <td key={b}><input aria-label={`${METRICS[m]?.label} ${b}`} inputMode="decimal" style={{ width: 80 }} value={values[m][b]} onChange={(e) => setValues({ ...values, [m]: { ...values[m], [b]: e.target.value } })} /></td>
+                  <td key={b}><input aria-label={`${METRICS[m]?.label}: ${BOUNDS.find(([k]) => k === b)[1].toLowerCase()} порог`} inputMode="decimal" style={{ width: 80 }} value={values[m][b]} onChange={(e) => setValues({ ...values, [m]: { ...values[m], [b]: e.target.value } })} /></td>
                 ))}
                 <td className="nowrap">
                   <button type="button" className="small" disabled={busy} onClick={() => run(async () => { await put(`/patients/${patientId}/thresholds/${m}`, Object.fromEntries(BOUNDS.map(([b]) => [b, toNum(values[m][b])]))); setSaved(m); onSaved() })}>Сохранить</button>

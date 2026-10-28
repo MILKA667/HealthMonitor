@@ -201,8 +201,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 .stat .hint { font-size: 12.5px; color: var(--muted); }
 
 /* Bedside-monitor style readout of the latest vital signs. */
-.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-top: 1px solid var(--border); }
-.channel { padding: 14px 16px 16px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.channel { padding: 4px 16px 6px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .channel .ch-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .channel .ch-label i { width: 10px; height: 3px; border-radius: 2px; flex-shrink: 0; }
 .channel .ch-value { font-size: 40px; line-height: 1.05; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 4px; }
@@ -377,7 +377,7 @@ td select { min-height: 34px; padding: 5px 8px; font-size: 14px; }
 .ward .when { font-size: 13px; color: var(--muted); text-align: right; white-space: nowrap; }
 .ward .when.stale { color: var(--stale); }
 .ward .quick { display: flex; gap: 4px; padding-right: 16px; }
-.ward-head { display: grid; grid-template-columns: 22px minmax(180px, 1.3fr) minmax(0, 1.6fr) 104px; gap: 14px; padding: 0 8px 8px 20px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border-strong); margin-right: 90px; }
+.ward-head { display: grid; grid-template-columns: 22px minmax(180px, 1.3fr) minmax(0, 1.6fr) 104px; gap: 14px; padding: 0 8px 8px 20px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border-strong); margin-right: 50px; }
 @media (max-width: 900px) {
   .ward-head { display: none; }
   .ward .bed { grid-template-columns: 22px minmax(0, 1fr) auto; padding-left: 16px; }
@@ -471,3 +471,11 @@ details[open] > summary { margin-bottom: 8px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+.queue-more { padding: 9px 16px; border-top: 1px solid var(--border); font-size: 13.5px; }
+.patient-top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.patient-top > .card { margin-top: 0; }
+@media (max-width: 1000px) { .patient-top { grid-template-columns: 1fr; } }
+.card-head > .row { min-width: 0; max-width: 100%; }
+.row > .segmented { min-width: 0; }
+.census .stat .value { overflow-wrap: anywhere; }
+@media (max-width: 560px) { .segmented { flex-wrap: wrap; } }

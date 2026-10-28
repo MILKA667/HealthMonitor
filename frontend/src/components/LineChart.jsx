@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { fmtDate, fmtDateTime, fmtNum } from '../format.js'
 
 const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)']
@@ -9,9 +9,16 @@ const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)']
  */
 export function LineChart({ series, thresholds, height = 240, unit = '' }) {
   const paperId = `paper-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
+  const box = useRef(null)
+  const [W, setW] = useState(720)
+  useEffect(() => {
+    if (!box.current || typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(([e]) => setW(Math.max(300, Math.round(e.contentRect.width))))
+    ro.observe(box.current)
+    return () => ro.disconnect()
+  }, [])
   const all = series.flatMap((s) => s.points)
-  if (all.length === 0) return <div className="empty">Нет измерений за период</div>
-  const W = 720
+  if (all.length === 0) return <div className="chart" ref={box}><div className="empty">Нет измерений за период</div></div>
   const H = height
   const pad = { l: 44, r: 12, t: 12, b: 28 }
   const ts = all.map((p) => p.t)
@@ -26,12 +33,13 @@ export function LineChart({ series, thresholds, height = 240, unit = '' }) {
   const x = (t) => pad.l + ((t - t0) / (t1 - t0)) * (W - pad.l - pad.r)
   const y = (v) => pad.t + (1 - (v - v0) / (v1 - v0)) * (H - pad.t - pad.b)
   const ticks = Array.from({ length: 5 }, (_, i) => v0 + ((v1 - v0) * i) / 4)
-  const xTicks = Array.from({ length: 4 }, (_, i) => t0 + ((t1 - t0) * i) / 3)
+  const nx = W < 520 ? 3 : 4
+  const xTicks = Array.from({ length: nx }, (_, i) => t0 + ((t1 - t0) * i) / (nx - 1))
 
   const lo = thresholds?.warnLow ?? v0
   const hi = thresholds?.warnHigh ?? v1
   return (
-    <div className="chart">
+    <div className="chart" ref={box}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`График: ${series.map((s) => s.label).join(', ')}`}>
         {/* ECG chart paper: 1 small square = 12 units, 1 large square = 5 small squares. */}
         <defs>

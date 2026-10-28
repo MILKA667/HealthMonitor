@@ -8,7 +8,8 @@ export function AuthShell({ title, wide, children }) {
   return (
     <div className="auth-page">
       <div className={`card auth-card ${wide ? 'wide' : ''}`}>
-        <div className="brand" style={{ marginLeft: 0 }}><Logo />HealthMonitor</div>
+        <div className="brand"><Logo />HealthMonitor</div>
+        <p className="tagline">Удалённое наблюдение при диабете, гипертонии и астме</p>
         <h1>{title}</h1>
         {children}
       </div>
