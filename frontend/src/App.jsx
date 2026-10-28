@@ -1,122 +1,82 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider, useAuth } from './auth.jsx'
+import { Layout } from './components/Layout.jsx'
+import { Spinner } from './components/ui.jsx'
+import { Login } from './pages/auth/Login.jsx'
+import { Register } from './pages/auth/Register.jsx'
+import { Forgot } from './pages/auth/Forgot.jsx'
+import { PatientHistoryPage, PatientOverview } from './pages/patient/Overview.jsx'
+import { DevicesPage, PatientChatPage, RelativesPage, RemindersPage } from './pages/patient/Care.jsx'
+import { ProfilePage } from './pages/patient/Profile.jsx'
+import { AlertsPage, DoctorChatList, DoctorDashboard, DoctorRequests } from './pages/doctor/Doctor.jsx'
+import { PatientCard } from './pages/shared/PatientCard.jsx'
+import { SecurityPage } from './pages/shared/Security.jsx'
+import { RelativeHome } from './pages/relative/Relative.jsx'
+import { AdminAccessLog, AdminAudit, AdminBackups, AdminConsents, AdminMetrics, AdminRequests, AdminUsers } from './pages/admin/Admin.jsx'
 
-function App() {
-  const [count, setCount] = useState(0)
+const HOME = { patient: '/patient', doctor: '/doctor', relative: '/relative', admin: '/admin' }
 
+function RequireRole({ role, children }) {
+  const { user } = useAuth()
+  if (user.role !== role) return <Navigate to={HOME[user.role]} replace />
+  return children
+}
+
+export function AppRoutes() {
+  const { loading, user } = useAuth()
+  if (loading) return <Spinner />
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot" element={<Forgot />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    )
+  }
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path="/patient" element={<RequireRole role="patient"><PatientOverview /></RequireRole>} />
+        <Route path="/patient/history" element={<RequireRole role="patient"><PatientHistoryPage /></RequireRole>} />
+        <Route path="/patient/reminders" element={<RequireRole role="patient"><RemindersPage /></RequireRole>} />
+        <Route path="/patient/devices" element={<RequireRole role="patient"><DevicesPage /></RequireRole>} />
+        <Route path="/patient/chat" element={<RequireRole role="patient"><PatientChatPage /></RequireRole>} />
+        <Route path="/patient/relatives" element={<RequireRole role="patient"><RelativesPage /></RequireRole>} />
+        <Route path="/patient/profile" element={<RequireRole role="patient"><ProfilePage /></RequireRole>} />
 
-      <div className="ticks"></div>
+        <Route path="/doctor" element={<RequireRole role="doctor"><DoctorDashboard /></RequireRole>} />
+        <Route path="/doctor/alerts" element={<RequireRole role="doctor"><AlertsPage /></RequireRole>} />
+        <Route path="/doctor/patients/:id" element={<RequireRole role="doctor"><PatientCard mode="doctor" /></RequireRole>} />
+        <Route path="/doctor/chat" element={<RequireRole role="doctor"><DoctorChatList /></RequireRole>} />
+        <Route path="/doctor/requests" element={<RequireRole role="doctor"><DoctorRequests /></RequireRole>} />
+        <Route path="/doctor/settings" element={<RequireRole role="doctor"><SecurityPage /></RequireRole>} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        <Route path="/relative" element={<RequireRole role="relative"><RelativeHome /></RequireRole>} />
+        <Route path="/relative/patients/:id" element={<RequireRole role="relative"><PatientCard mode="relative" /></RequireRole>} />
+        <Route path="/relative/settings" element={<RequireRole role="relative"><SecurityPage /></RequireRole>} />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+        <Route path="/admin" element={<RequireRole role="admin"><AdminMetrics /></RequireRole>} />
+        <Route path="/admin/users" element={<RequireRole role="admin"><AdminUsers /></RequireRole>} />
+        <Route path="/admin/requests" element={<RequireRole role="admin"><AdminRequests /></RequireRole>} />
+        <Route path="/admin/audit" element={<RequireRole role="admin"><AdminAudit /></RequireRole>} />
+        <Route path="/admin/access" element={<RequireRole role="admin"><AdminAccessLog /></RequireRole>} />
+        <Route path="/admin/consents" element={<RequireRole role="admin"><AdminConsents /></RequireRole>} />
+        <Route path="/admin/backups" element={<RequireRole role="admin"><AdminBackups /></RequireRole>} />
+        <Route path="/admin/settings" element={<RequireRole role="admin"><SecurityPage /></RequireRole>} />
+      </Route>
+      <Route path="*" element={<Navigate to={HOME[user.role]} replace />} />
+    </Routes>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
+  )
+}
