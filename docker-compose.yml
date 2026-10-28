@@ -1,0 +1,36 @@
+# Pilot deployment on a server located in the Russian Federation (152-FZ, art. 18 part 5).
+# TLS terminates at the reverse proxy (Caddy); the API rejects plain HTTP in production.
+#   cp .env.example .env   # fill in secrets
+#   docker compose up -d --build
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATA_REGION: ru
+      HM_BACKUP_DAILY: "1"
+    volumes:
+      - hm-data:/data
+      - hm-backups:/backups
+    expose:
+      - "4000"
+
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      HM_DOMAIN: ${HM_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  hm-data:
+  hm-backups:
+  caddy-data:
