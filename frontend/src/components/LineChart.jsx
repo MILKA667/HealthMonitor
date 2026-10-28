@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { fmtDate, fmtDateTime, fmtNum } from '../format.js'
 
 const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)']
@@ -6,12 +7,13 @@ const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)']
  * Time-series chart (KAN-26). `series`: [{ key, label, points: [{ t, v }] }]. `thresholds` draws the
  * warning corridor of the first series and its critical limits.
  */
-export function LineChart({ series, thresholds, height = 220, unit = '' }) {
+export function LineChart({ series, thresholds, height = 240, unit = '' }) {
+  const paperId = `paper-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   const all = series.flatMap((s) => s.points)
   if (all.length === 0) return <div className="empty">Нет измерений за период</div>
   const W = 720
   const H = height
-  const pad = { l: 44, r: 16, t: 12, b: 26 }
+  const pad = { l: 44, r: 12, t: 12, b: 28 }
   const ts = all.map((p) => p.t)
   const limits = thresholds ? [thresholds.critLow, thresholds.warnLow, thresholds.warnHigh, thresholds.critHigh].filter((v) => v != null) : []
   const vs = all.map((p) => p.v).concat(limits)
@@ -31,12 +33,30 @@ export function LineChart({ series, thresholds, height = 220, unit = '' }) {
   return (
     <div className="chart">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`График: ${series.map((s) => s.label).join(', ')}`}>
+        {/* ECG chart paper: 1 small square = 12 units, 1 large square = 5 small squares. */}
+        <defs>
+          <pattern id={paperId} width="60" height="60" patternUnits="userSpaceOnUse" x={pad.l} y={pad.t}>
+            {[12, 24, 36, 48].map((o) => (
+              <g key={o}>
+                <line className="paper-minor" x1={o} x2={o} y1="0" y2="60" />
+                <line className="paper-minor" x1="0" x2="60" y1={o} y2={o} />
+              </g>
+            ))}
+            <line className="paper-major" x1="0" x2="0" y1="0" y2="60" />
+            <line className="paper-major" x1="0" x2="60" y1="0" y2="0" />
+          </pattern>
+        </defs>
+        <rect x={pad.l} y={pad.t} width={W - pad.l - pad.r} height={H - pad.t - pad.b} fill={`url(#${paperId})`} />
         {thresholds && (thresholds.warnLow != null || thresholds.warnHigh != null) && (
-          <rect className="band-warn" x={pad.l} width={W - pad.l - pad.r} y={y(Math.min(hi, v1))} height={Math.max(0, y(Math.max(lo, v0)) - y(Math.min(hi, v1)))} />
+          <g>
+            <rect className="band-warn" x={pad.l} width={W - pad.l - pad.r} y={y(Math.min(hi, v1))} height={Math.max(0, y(Math.max(lo, v0)) - y(Math.min(hi, v1)))} />
+            {[thresholds.warnLow, thresholds.warnHigh].filter((v) => v != null && v > v0 && v < v1).map((v) => (
+              <line key={`w${v}`} className="band-edge" x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} />
+            ))}
+          </g>
         )}
         {ticks.map((v) => (
           <g key={v}>
-            <line className="grid-line" x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} />
             <text className="axis-label" x={pad.l - 6} y={y(v) + 4} textAnchor="end">{fmtNum(Math.round(v * 10) / 10)}</text>
           </g>
         ))}
@@ -54,9 +74,9 @@ export function LineChart({ series, thresholds, height = 220, unit = '' }) {
           const d = pts.map((p, j) => `${j ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')
           return (
             <g key={s.key}>
-              <path d={d} fill="none" stroke={COLORS[i % COLORS.length]} strokeWidth="2" strokeLinejoin="round" />
+              <path d={d} fill="none" stroke={COLORS[i % COLORS.length]} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
               {pts.map((p, j) => (
-                <circle key={`${p.t}-${j}`} cx={x(p.t)} cy={y(p.v)} r={p.severity && p.severity !== 'normal' ? 4.5 : 3} fill={p.severity === 'critical' ? 'var(--critical)' : p.severity === 'warning' ? 'var(--warning)' : COLORS[i % COLORS.length]}>
+                <circle key={`${p.t}-${j}`} cx={x(p.t)} cy={y(p.v)} r={p.severity && p.severity !== 'normal' ? 4.5 : 2.8} fill={p.severity === 'critical' ? 'var(--critical)' : p.severity === 'warning' ? 'var(--warning-fill)' : COLORS[i % COLORS.length]} stroke="var(--surface)" strokeWidth={p.severity && p.severity !== 'normal' ? 1.5 : 0}>
                   <title>{`${s.label}: ${fmtNum(p.v)} ${unit} — ${fmtDateTime(new Date(p.t).toISOString())}`}</title>
                 </circle>
               ))}
@@ -68,7 +88,8 @@ export function LineChart({ series, thresholds, height = 220, unit = '' }) {
         {series.map((s, i) => (
           <span key={s.key}><i style={{ background: COLORS[i % COLORS.length] }} />{s.label}</span>
         ))}
-        {thresholds && <span><i style={{ background: 'var(--ok-soft)', border: '1px solid var(--ok)' }} />целевой диапазон</span>}
+        {thresholds && <span><i className="band" />целевой диапазон</span>}
+        {thresholds && (thresholds.critLow != null || thresholds.critHigh != null) && <span><i style={{ background: 'none', borderTop: '2px dashed var(--critical)', height: 0 }} />критическая граница</span>}
       </div>
     </div>
   )
